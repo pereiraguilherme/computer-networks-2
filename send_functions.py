@@ -2,7 +2,7 @@ import socket, sys
 from socket import AF_PACKET, SOCK_RAW
 from struct import *
 
-def sendeth(eth_frame, interface = "enp4s0"):
+def sendeth(eth_frame, interface = "enp7s0"):
 	"""Send raw Ethernet packet on interface."""
 	s = socket.socket(AF_PACKET, SOCK_RAW)
 	s.bind((interface, 0))
@@ -40,8 +40,8 @@ def build_ipv6_header(source_addr, dest_addr):
 	hop_limit = 255
 	sub_packet_2 = (payload_lenght << 16) + (next_header << 8) + hop_limit
 	
-	ip_header = pack('!II' , sub_packet_1,sub_packet_2,source_addr,dest_addr)
-	return ip_header
+	ip_header = pack('!II' , sub_packet_1,sub_packet_2)
+	return ip_header + source_addr + dest_addr
 
 """
 Function that build tcp header
@@ -99,17 +99,17 @@ if __name__ == "__main__":
 	eth_header = pack('!6B6BH', dst_mac[0], dst_mac[1], dst_mac[2], dst_mac[3], dst_mac[4], dst_mac[5], 
 		src_mac[0], src_mac[1], src_mac[2], src_mac[3], src_mac[4], src_mac[5], 0x86DD)
 	
-	source_ip = '10.32.143.171 '
-	dest_ip = '10.32.143.171 '			# or socket.gethostbyname('www.google.com')
+	source_ip = '192.168.11.17'
+	dest_ip = '192.168.11.17'			# or socket.gethostbyname('www.google.com')
 
 	
-	source_addr = socket.inet_pton(socket.AF_INET6,"fe80::a61f:72ff:fef5:9086")
-	dest_addr = socket.inet_pton(socket.AF_INET6,"fe80::a61f:72ff:fef5:9086")
+	source_addr = socket.inet_pton(socket.AF_INET6,"fe80::8491:bfdf:4d23:9a9b")
+	dest_addr = socket.inet_pton(socket.AF_INET6,"fe80::8491:bfdf:4d23:9a9b")
 	
 	ip_header = build_ipv6_header(source_addr, dest_addr)
-	tcp_header = build_tcp_header(1234, 0, source_ip, dest_ip)
+	tcp_header = build_tcp_header(1234, 44, source_ip, dest_ip)
 
 	# final full packet - syn packets dont have any data
 	packet = eth_header + ip_header + tcp_header
-	r = sendeth(packet, "enp4s0")
+	r = sendeth(packet, "enp7s0")
 	print("Sent %d bytes" % r)
