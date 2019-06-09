@@ -2,7 +2,7 @@ import socket, sys
 from socket import AF_PACKET, SOCK_RAW
 from struct import *
 
-def sendeth(eth_frame, interface = "enp7s0"):
+def sendeth(eth_frame, interface = "ens33"):
 	"""Send raw Ethernet packet on interface."""
 	s = socket.socket(AF_PACKET, SOCK_RAW)
 	s.bind((interface, 0))
@@ -35,7 +35,7 @@ def build_ipv6_header(source_addr, dest_addr):
 	sub_packet  = shift(version, 8, traffic_class)
 	flow_label = 0
 	#sub_packet << 20 + flow_label
-	sub_packet_1 = shift(sub_packet_1, 20, flow_label)
+	sub_packet_1 = shift(sub_packet, 20, flow_label)
 	payload_lenght = 20 
 	
 	next_header = socket.IPPROTO_TCP
@@ -105,31 +105,31 @@ def tcp_connect(start_port, end_port):
 		tcp_header = build_tcp_header(1234, ports, source_ip, dest_ip)
 		# final full packet - syn packets dont have any data
 		packet = eth_header + ip_header + tcp_header
-		result = sendeth(packet, "enp7s0")
+		result = sendeth(packet, "ens33")
+		print(result)
 
 if __name__ == "__main__":
 	# src=fe:ed:fa:ce:be:ef, dst=52:54:00:12:35:02, type=0x0800 (IP)
-	dst_mac = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
-	src_mac = [0x00, 0x0a, 0x11, 0x11, 0x22, 0x22]
+	src_mac = [0x00, 0x0c, 0x29,0x14, 0x00, 0x60]
+	dst_mac = [0x00, 0x0c, 0x29,0x14, 0x00, 0x60]
 	
 	# Ethernet header
 	eth_header = pack('!6B6BH', dst_mac[0], dst_mac[1], dst_mac[2], dst_mac[3], dst_mac[4], dst_mac[5], 
 		src_mac[0], src_mac[1], src_mac[2], src_mac[3], src_mac[4], src_mac[5], 0x86DD)
 	
-	source_ip = '192.168.11.17'
-	dest_ip = '192.168.11.17'			# or socket.gethostbyname('www.google.com')
+	source_ip = '192.168.232.131'
+	dest_ip = '192.168.232.131'			# or socket.gethostbyname('www.google.com')
 
 	
-	source_addr = socket.inet_pton(socket.AF_INET6,"fe80::8491:bfdf:4d23:9a9b")
-	dest_addr = socket.inet_pton(socket.AF_INET6,"fe80::8491:bfdf:4d23:9a9b")
+	source_addr = socket.inet_pton(socket.AF_INET6,"fe80::6a2e:7b4e:5149:f3d4")
+	dest_addr = socket.inet_pton(socket.AF_INET6,"fe80::6a2e:7b4e:5149:f3d4")
 
 	ip_header = build_ipv6_header(source_addr, dest_addr)
-
-	if sys.argv[1] == 1:
-		tcp_connect(sys.argv[2], sys.argv[3])
-	elif sys.argv[1] == 2:
+	if sys.argv[1] == "1":
+		tcp_connect(int(sys.argv[2]), int(sys.argv[3]))
+	elif sys.argv[1] == "2":
 		tcp_half_openning(sys.argv[2], sys.argv[3])
-	elif sys.argv[1] == 3:
+	elif sys.argv[1] == "3":
 		tcp_fin(sys.argv[2], sys.argv[3]) 	
-	else:
+	elif sys.argv[1] == "4":
 		syn_ack(sys.argv[2], sys.argv[3])
