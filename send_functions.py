@@ -30,17 +30,19 @@ Function that build ipv6 header
 def build_ipv6_header(source_addr, dest_addr):
 	version = 6
 	traffic_class = 0
-	sub_packet  = version << 8 + traffic_class
+	shift = lambda shifted, shift, adder : shifted << shift + traffic_class
+	#version << 8 << traffic_class
+	sub_packet  = shift(version, 8, traffic_class)
 	flow_label = 0
-	sub_packet_1 = sub_packet << 20 + flow_label
-
+	#sub_packet << 20 + flow_label
+	sub_packet_1 = shift(sub_packet_1, 20, flow_label)
 	payload_lenght = 20 
 	
 	next_header = socket.IPPROTO_TCP
 	hop_limit = 255
 	sub_packet_2 = (payload_lenght << 16) + (next_header << 8) + hop_limit
 	
-	ip_header = pack('!II' , sub_packet_1,sub_packet_2)
+	ip_header = pack('!II', sub_packet_1,sub_packet_2)
 	return ip_header + source_addr + dest_addr
 
 """
@@ -88,7 +90,22 @@ def build_tcp_header(source, dest, source_ip, dest_ip):
 	 
 	# make the tcp header again and fill the correct checksum
 	return pack('!HHLLBBHHH' , source, dest, seq, ack_seq, offset_res, tcp_flags,  window, tcp_checksum , urg_ptr)
-	 
+
+def tcp_half_openning(start_port, end_port):
+	print("half openning")
+
+def tcp_fin(start_port, end_port):
+	print("tcp fin")
+
+def syn_ack(start_port, end_port):
+	print("syn ack")
+
+def tcp_connect(start_port, end_port):
+	for ports in range(start_port, end_port):
+		tcp_header = build_tcp_header(1234, ports, source_ip, dest_ip)
+		# final full packet - syn packets dont have any data
+		packet = eth_header + ip_header + tcp_header
+		result = sendeth(packet, "enp7s0")
 
 if __name__ == "__main__":
 	# src=fe:ed:fa:ce:be:ef, dst=52:54:00:12:35:02, type=0x0800 (IP)
@@ -105,11 +122,14 @@ if __name__ == "__main__":
 	
 	source_addr = socket.inet_pton(socket.AF_INET6,"fe80::8491:bfdf:4d23:9a9b")
 	dest_addr = socket.inet_pton(socket.AF_INET6,"fe80::8491:bfdf:4d23:9a9b")
-	
-	ip_header = build_ipv6_header(source_addr, dest_addr)
-	tcp_header = build_tcp_header(1234, 44, source_ip, dest_ip)
 
-	# final full packet - syn packets dont have any data
-	packet = eth_header + ip_header + tcp_header
-	r = sendeth(packet, "enp7s0")
-	print("Sent %d bytes" % r)
+	ip_header = build_ipv6_header(source_addr, dest_addr)
+
+	if sys.argv[1] == 1:
+		tcp_connect(sys.argv[2], sys.argv[3])
+	elif sys.argv[1] == 2:
+		tcp_half_openning(sys.argv[2], sys.argv[3])
+	elif sys.argv[1] == 3:
+		tcp_fin(sys.argv[2], sys.argv[3]) 	
+	else:
+		syn_ack(sys.argv[2], sys.argv[3])
