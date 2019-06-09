@@ -1,7 +1,7 @@
 # Trabalho Final Redes 2
-#####Trabalho sobre protocolo IPV6 e TCP da disciplina/cadeira de Redes 2. 
+##### Trabalho sobre protocolo IPV6 e TCP da disciplina/cadeira de Redes 2. 
 
-####Configuracao:
+#### Configuracao:
 
 Para rodar o projeto e preciso configurar algumas coisas no arquivo send_functions.py.
 O primeiro e o endereco MAC da maquina. Para isso segue descricao abaixo:
@@ -18,7 +18,7 @@ Apos, configurar ip de destino e ip de origem. Para rodar ainda precisamos passa
 | Porta de inicio | 2 | Define por qual porta do destino vai comecar o ataque |
 | Porta de fim | 3 | Define por qual porta do destino vai acabar o ataque|
 
-####Tipos de ataque:
+#### Tipos de ataque:
 Abaixo temos uma lista com os metodos disponiveis para uso, com os respectivos codigos
 
 | Metodo| Codigo | Descricao |
@@ -30,7 +30,7 @@ Abaixo temos uma lista com os metodos disponiveis para uso, com os respectivos c
  
 
 
-####Exemplo:
+#### Exemplo:
 Exemplo de execucao utilizando o metodo **tcp connect** e o range de portas definidos entre 80 e 120
     
     
