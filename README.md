@@ -25,7 +25,7 @@ Abaixo temos uma lista com os metodos disponiveis para uso, com os respectivos c
 | --- | --- | --- |
 | TCP connect| 1 | Envia mensagem de SYN para uma porta, se a porta estiver aberta recebe um SYN/ACK de volta e por fim manda um ACK, dando fim ao handshaking|
 | TCP half-opening | 2 | Envia mensagem de SYN para uma porta, se a porta estiver aberta recebe um SYN/ACK de volta e por fim manda um pacote RST para fechar a conexao|
-| TCP FIN | 3 | Uma mensagem FIn e enviada para uma porta, se a porta estiver fechada um RST deve ser recebido, senao a porta esta aberta|
+| TCP FIN | 3 | Uma mensagem FIN e enviada para uma porta, se a porta estiver fechada um RST deve ser recebido, senao a porta esta aberta|
 | SYN/ACK | 4 | Uma mensagem SYN/ACK e enviada para uma porta, se a porta estiver aberta, um RST deve ser recebido, senao a porta esta fechada|
  
 

@@ -31,7 +31,7 @@ def build_ipv6_header(source_addr, dest_addr):
 	version = 6
 	traffic_class = 0
 	shift = lambda shifted, shift, adder : shifted << shift + traffic_class
-	#version << 8 << traffic_class
+	#version << 8 + traffic_class
 	sub_packet  = shift(version, 8, traffic_class)
 	flow_label = 0
 	#sub_packet << 20 + flow_label
@@ -41,9 +41,8 @@ def build_ipv6_header(source_addr, dest_addr):
 	next_header = socket.IPPROTO_TCP
 	hop_limit = 255
 	sub_packet_2 = (payload_lenght << 16) + (next_header << 8) + hop_limit
-	
-	ip_header = pack('!II', sub_packet_1,sub_packet_2)
-	return ip_header + source_addr + dest_addr
+	ip_header = pack('!II16s16s', sub_packet_1,sub_packet_2, source_addr, dest_addr)
+	return ip_header
 
 """
 Function that build tcp header
