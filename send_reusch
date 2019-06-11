@@ -10,13 +10,22 @@ import ipaddress
 #
 #
 #
-device_interface = "enp0s3"
+device_interface = "enp4s0"
 
-def sendeth(eth_frame, interface = "enp0s3"):
+msg_dict = {
+	"syn": [0,0,0,0,1,0], # syn
+	"ack": [0,1,0,0,0,0], # ack
+	"rst": [0,0,0,1,0,0],
+	"syn/ack":[0,1,0,0,1,0],
+	"fin": [0,0,0,0,0,1],
+}
+def sendeth(eth_frame, interface = device_interface):
 	"""Send raw Ethernet packet on interface."""
 	s = socket.socket(AF_PACKET, SOCK_RAW)
 	s.bind((interface, 0))
-	return s.send(eth_frame)
+	result = s.send(eth_frame)
+	s.close()
+	return result
 
 def checksum(msg):
 	s = 0
@@ -62,19 +71,16 @@ Function that build tcp header
 	@parameter dest_ip - destination ip
 	@return tcp header in hexadecimal
 """
-def build_tcp_header(source, dest, source_ip, dest_ip,atk_type):
+def build_tcp_header(source, dest, source_ip, dest_ip,atk_type,sequence):
 	# tcp header fields
-	seq = 0
-	ack_seq = 0
+	seq = sequence
+	ack_seq = sequence
 	doff = 5    #4 bit field, size of tcp header, 5 * 4 = 20 bytes
 
 	#tcp flags
-	fin = 0
-	syn = 1
-	rst = 0
-	psh = 0
-	ack = 0
-	urg = 0
+	urg,ack,psh,rst,syn,fin = msg_dict[atk_type]
+	print(msg_dict[atk_type])
+
 	window = socket.htons(5840)		# maximum allowed window size
 	check = 0
 	urg_ptr = 0
@@ -86,17 +92,16 @@ def build_tcp_header(source, dest, source_ip, dest_ip,atk_type):
 	tcp_header = pack('!HHLLBBHHH' , source, dest, seq, ack_seq, offset_res, tcp_flags,  window, check, urg_ptr)
 
 	# pseudo header fields
-	source_address = socket.inet_aton( source_ip )
-	dest_address = socket.inet_aton(dest_ip)
+	source_address = socket.inet_pton(socket.AF_INET6, source_ip)
+	dest_address = socket.inet_pton(socket.AF_INET6,dest_ip)
 	placeholder = 0
 	protocol = socket.IPPROTO_TCP
 	tcp_length = len(tcp_header)
 
-	psh = pack('!4s4sBBH' , source_address , dest_address , placeholder , protocol , tcp_length)
+	psh = pack('!16s16sHBB' , source_address , dest_address , tcp_length, placeholder, protocol)
 	psh = psh + tcp_header
 
-	tcp_checksum = 0x8C8F
-	#checksum(psh)
+	tcp_checksum = checksum(psh)
 
 	# make the tcp header again and fill the correct checksum
 	return pack('!HHLLBBHHH' , source, dest, seq, ack_seq, offset_res, tcp_flags,  window, tcp_checksum , urg_ptr)
@@ -110,11 +115,11 @@ def tcp_fin(start_port, end_port):
 def syn_ack(start_port, end_port):
 	print("syn ack")
 
-def tcp_connect(msg_type):
-	tcp_header = build_tcp_header(1234, ports, source_ip, dest_ip,msg_type)
+def tcp_connect(msg_type,sequence):
+	tcp_header = build_tcp_header(631, ports, source_ip, dest_ip,msg_type,sequence)
 	# final full packet - syn packets dont have any data
 	packet = eth_header + ip_header + tcp_header
-	result = sendeth(packet, "enp0s3")
+	result = sendeth(packet, device_interface)
 	print("Sent {} bytes" .format(result))
 	return
 
@@ -132,7 +137,7 @@ def tcp_connect(msg_type):
 
 def check_answer(my_ipv6,atk_dst_ipv6,atk_type,msg_type,src_ipv6,dst_ipv6,dst_tcp):
 	print("Checking answer")
-	if (atk_type == msg_type) and (my_ipv6 == dst_ipv6) and (atk_dst_ipv6 == src_ipv6):
+	if (response_type == msg_type) and (atk_dst_ipv6 == src_ipv6):
 		ret_value = True
 	else:
 		ret_value = False
@@ -144,12 +149,19 @@ def unpack_eth_header(data):
     return socket.htons(proto)
 
 def check_type(tcp_flags):
-
-	# ATAQUE 1  ESPERA RESPOSTA 1
-	# ATAQUE 2  ESPERA RESPOSTA 2
-	#if tcp_flags == "000010": # 010010
-	return 0
-       # EM ABERTO COPIAR LISTENER
+        sequence = ''
+        for flag in tcp_flags:
+                sequence += str(flag)
+        if '000010' == sequence:
+                return 'syn'
+        elif '010000' == sequence:
+                return 'ack'
+        elif '010100' == sequence:
+                return 'ack/rst'
+        elif '000001' == sequence:
+                return 'fin'
+        elif '010010' == sequence:
+                return 'syn/ack'
 
 def get_ipv6_addr(bytes_addr):
     return str(ipaddress.ip_address(bytes_addr))
@@ -179,6 +191,7 @@ def unpack_tcp_header(data):
 	src_port, dest_port, sequence, acknowledgment, offset_reserved_flags, tcp_flags, window, tcp_checksum, urg_ptr = unpack('!HHLLBBHHH', data)
 	#print(src_port)
 	#print(dest_port)
+	#print('flags raw {}'.format(tcp_flags))
 	offset = (offset_reserved_flags >> 12) * 4
 	flag_urg = (tcp_flags & 32) >> 5
 	flag_ack = (tcp_flags & 16) >> 4
@@ -193,58 +206,65 @@ def unpack_tcp_header(data):
 	flags.append(flag_rst)
 	flags.append(flag_syn)
 	flags.append(flag_fin)
+	#print(flags)
 	# identficiar tipo de ataque
 	#print(flags)
 	return dest_port, flags
 
 
-
+def determine_answer(msg_type,atk_type):
+	if(atk_type == 1):
+		if(msg_type == 'syn/ack'):
+			return True
+		elif msg_type == 'ack/rst':
+			return False
+	# if atk 2
+	
 
 ##### LISTENER ######
-def listener(my_ipv6,atk_dst_ipv6,atk_type):
-	conn = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3))
+def listener(my_ipv6,atk_dst_ipv6,atk_type, conn):
 	print("Waiting for answer")
 	while True:
 		raw_packet, addr = conn.recvfrom(65535)
 		eth_proto = unpack_eth_header(raw_packet[:14])
 		src_ipv6, dst_ipv6 = unpack_ipv6_header(raw_packet[14:54])
-		if eth_proto == 56710 and my_ipv6 == src_ipv6:
+		if eth_proto == 56710 and my_ipv6 == dst_ipv6 and len(raw_packet) <= 80:
 			dst_tcp, tcp_flags = unpack_tcp_header(raw_packet[54:74])
 			msg_type = check_type(tcp_flags)
-			print("Answer received")
-			if check_answer(my_ipv6,atk_dst_ipv6,atk_type,msg_type,src_ipv6,dst_ipv6,dst_tcp):
-			   return True
-			else:
-				return False
+			return determine_answer(msg_type,atk_type)
 
 
     ############## MAIN ###############
 #
 if __name__ == "__main__":
     # src=fe:ed:fa:ce:be:ef, dst=52:54:00:12:35:02, type=0x0800 (IP)
-	src_mac = [0xa4, 0x1f, 0x72,0xf5, 0x90, 0x86]
-	dst_mac = [0xa4, 0x1f, 0x72,0xf5, 0x90, 0x86]
+	src_mac = [0xa4, 0x1f, 0x72,0xf5, 0x90, 0x80]
+	dst_mac = [0x74, 0xe6, 0xe2,0xcf, 0x93, 0x49]
 
 	# Ethernet header
 	eth_header = pack('!6B6BH', dst_mac[0], dst_mac[1], dst_mac[2], dst_mac[3], dst_mac[4], dst_mac[5],
 		src_mac[0], src_mac[1], src_mac[2], src_mac[3], src_mac[4], src_mac[5], 0x86DD)
 
-	source_ip = '10.32.143.171'
-	dest_ip = '10.32.143.171'
-	my_ipv6 = "fe80::a61f:72ff:fef5:9086"
-	dst_ipv6 = "fe80::a61f:72ff:fef5:9086"
+	source_ip = "fe80::a61f:72ff:fef5:9080"
+	dest_ip = "fe80::b37:7d65:17a:d87f"
+
+	my_ipv6 = "fe80::a61f:72ff:fef5:9080"
+	dst_ipv6 = "fe80::b37:7d65:17a:d87f"
 
 	source_addr = socket.inet_pton(socket.AF_INET6,my_ipv6)
 	dest_addr = socket.inet_pton(socket.AF_INET6,dst_ipv6)
 
 	ip_header = build_ipv6_header(source_addr, dest_addr)
 
+	conn = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3))
+
 	for ports in range(int(sys.argv[2]), int(sys.argv[3])):
+		print('Port {}'.format(ports))
 		if sys.argv[1] == "1":
-			tcp_connect(sys.argv[1])
-			if listener(my_ipv6,dst_ipv6,1):
+			tcp_connect("syn",0)
+			if listener(my_ipv6,dst_ipv6,1, conn):
 				print("SYNACK")
-				#tcp_connect(5) # RESPONDE UM ACK
+				tcp_connect("ack",1) # RESPONDE UM ACK
 				# FIM DO ATAQUE
 				break
 				# PORTA ABERTA -> ENVIAR ACK
@@ -259,6 +279,5 @@ if __name__ == "__main__":
 			tcp_fin(sys.argv[2], sys.argv[3])
 		elif sys.argv[1] == "4":
 			syn_ack(sys.argv[2], sys.argv[3])
-
 
 
