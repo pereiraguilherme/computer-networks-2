@@ -3,48 +3,86 @@ import ipaddress
 from socket import AF_PACKET, SOCK_RAW
 from struct import *
 
-port_treshhold = 5
-msg = {
-        "ip_src": '',
-        "ip_dst": '',  
-        "msg_type": [],
-        "times": 0
-}
-
-history = []
-def check_if_atk(src_addr, dst_port, atk_type):
-        if(len(history) != 0):
-                for atks in history:
-                     if atks["ip"] == src_addr and atks["types"] == atk_type:
-                             atks["times"] += 1
-                             if(atks["times"] == port_treshhold):
-                                     return True
+def check_msg(src_addr, dst_addr, msg_type, msg_history):
+        if msg_history:
+                for packet in msg_history:
+                        if packet["ip_src"] == src_addr and packet["ip_dst"] == dst_addr:
+                                if msg_type not in packet["msg_type"]:
+                                        packet["msg_type"].append(msg_type)
+                                        return
+                        else:
+                                msg = {
+                                        "ip_src": src_addr,
+                                        "ip_dst": dst_addr,  
+                                        "msg_type": [msg_type],
+                                }
+                                msg_history.append(msg)         
+                                return                      
+        else:
+                msg = {
+                        "ip_src": src_addr,
+                        "ip_dst": dst_addr,  
+                        "msg_type": [msg_type],
+                }
+                msg_history.append(msg)         
+                return                  
+        
+      
+def check_atk(src_addr, dst_addr, msg_type, atk_history, msg_history):
+        for msg in msg_history:
+                if msg["ip_src"] == src_addr and msg["ip_dst"] == dst_addr:
+                        if len(msg["msg_type"]) == 2:
+                                atk_type = check_atk(msg["msg_type"])
+                                if atk_history:
+                                        for atk in atk_history:
+                                                if atk["ip_src"] == src_addr:
+                                                        atk["atk_types"].append(atk_type)
+                                                        atk["times"] +=1
+                                                        if atk["times"] >= 5:
+                                                                return True
+                                                else:
+                                                        new_atk = {
+                                                                "ip_src": src_addr,
+                                                                "atk_type": atk_type,
+                                                                "times": 1
+                                                        }
+                                                        atk_history.append(new_atk)
+                                                        return False
                                 else:
+                                        new_atk = {
+                                        "ip_src": src_addr,
+                                        "atk_type": atk_type,
+                                        "times": 1
+                                        }
+                                        atk_history.append(new_atk)
                                         return False
                         else:
-                                atk["ip"] = src_addr
-                                atk["type"] = atk_type
-                                atk["times"] += 1
-                                history.append(atk)
-                                return False
-        else:
-                atk["ip"] = src_addr
-                atk["type"] = atk_type
-                atk["times"] += 1
-                history.append(atk)
-                return False
+                                continue
+                else:
+                        continue
+        return False
 
-##urg, ack, psh, rst, syn, fin
-##TCP connect sequence '000010'
-##TCP half sequence ''
+# ##urg, ack, psh, rst, syn, fin
+# ## syn sequence '000010'
+# ## ack sequence '010000'
+# ## rst sequence '000100'
+# ## fin sequence '000001'
+# ## syn/ack sequence '010010'
 def check_type(tcp_flags):
         sequence = ''
         for flag in tcp_flags:
-                sequence += flag
-
+                sequence += str(flag)
+        print(sequence)
         if '000010' == sequence:
                 return 'syn'
-        elif('')
+        elif '010000' == sequence:
+                return 'ack'
+        elif '000100' == sequence:
+                return 'rst'
+        elif '000001' == sequence:
+                return 'fin'
+        elif '010010' == sequence:
+                return 'syn/ack'
 
 
 def get_mac_addr(bytes_addr):
@@ -65,17 +103,10 @@ def unpack_ipv6_header(data):
         version2 = bits_packet_1[:4]
         traffic_class2 = bits_packet_1[4:12]
         flow_label2 = bits_packet_1[12:32]
-        print('Version: {}'.format(int(version2,2)))
-        print('Traffic: {}'.format(int(traffic_class2,2)))
-        print('Flow: {}'.format(int(flow_label2,2)))
-
         bits_packet_2 = "{:32b}".format(sub_packet_2)
         payload_lenght2 = bits_packet_2[:16]
         next_header2 = bits_packet_2[16:24]
         hop_limit2 = bits_packet_2[24:32]
-        print('Payload: {}'.format(int(payload_lenght2,2)))
-        print('Next: {}'.format(int(next_header2,2)))
-        print('hop: {}'.format(int(hop_limit2,2)))
 
         return get_ipv6_addr(src_addr), get_ipv6_addr(dst_addr)
 
@@ -91,13 +122,17 @@ def unpack_tcp_header(data):
         flag_syn = (tcp_flags & 2) >> 1
         flag_fin = tcp_flags & 1
         flags = []
-        flags.append(flag_urg).append(flag_ack).append(flag_psh).append(flag_rst).append(flag_syn).append(flag_fin)
-        # identficiar tipo de ataque
-
+        flags.append(flag_urg)
+        flags.append(flag_ack)
+        flags.append(flag_psh)
+        flags.append(flag_rst)
+        flags.append(flag_syn)
+        flags.append(flag_fin)
         return dest_port, flags
 
 def listener():
-        state = ''
+        msg_history = []
+        atk_history = []
         conn = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3))
         print("Start listener")
         while True:
@@ -106,9 +141,11 @@ def listener():
                 if eth_proto == 56710:
                         print('Destinantion: {}, Source:{}, Protocol:{}'.format(dst_mac, src_mac,eth_proto))    
                         src_addr, dst_addr = unpack_ipv6_header(raw_packet[14:54])
-                        dst_adder, tcp_flags = unpack_tcp_header(raw_packet[54:74])
+                        dst_port, tcp_flags = unpack_tcp_header(raw_packet[54:75])
                         msg_type = check_type(tcp_flags)
-                        
+                        check_msg(src_addr,dst_addr,msg_type, msg_history)
+                        atk = check_atk(src_addr,dst_addr,msg_type, atk_history, msg_history)
+                        print(atk)
                         
 
 listener()
