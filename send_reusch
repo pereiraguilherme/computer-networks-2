@@ -79,7 +79,7 @@ def build_tcp_header(source, dest, source_ip, dest_ip,atk_type,sequence):
 
 	#tcp flags
 	urg,ack,psh,rst,syn,fin = msg_dict[atk_type]
-	print(msg_dict[atk_type])
+	#print(msg_dict[atk_type])
 
 	window = socket.htons(5840)		# maximum allowed window size
 	check = 0
@@ -106,14 +106,6 @@ def build_tcp_header(source, dest, source_ip, dest_ip,atk_type,sequence):
 	# make the tcp header again and fill the correct checksum
 	return pack('!HHLLBBHHH' , source, dest, seq, ack_seq, offset_res, tcp_flags,  window, tcp_checksum , urg_ptr)
 
-def tcp_half_openning(start_port, end_port):
-	print("half openning")
-
-def tcp_fin(start_port, end_port):
-	print("tcp fin")
-
-def syn_ack(start_port, end_port):
-	print("syn ack")
 
 def tcp_connect(msg_type,sequence):
 	tcp_header = build_tcp_header(631, ports, source_ip, dest_ip,msg_type,sequence)
@@ -235,11 +227,20 @@ def determine_answer(msg_type,atk_type):
 
 ##### LISTENER ######
 def listener(my_ipv6,atk_dst_ipv6,atk_type, conn):
+	msg_count = 0
+	timeout_after = 100 # messages on network
 	print("Waiting for answer")
 	while True:
 		raw_packet, addr = conn.recvfrom(65535)
 		eth_proto = unpack_eth_header(raw_packet[:14])
 		src_ipv6, dst_ipv6 = unpack_ipv6_header(raw_packet[14:54])
+		if ( atk_type == 3 or atk_type == 4):
+			msg_count += 1
+		if (msg_count > timeout_after):
+			if ( atk_type == 3):
+				return True
+			elif ( atk_type == 4):
+				return False
 		if eth_proto == 56710 and my_ipv6 == dst_ipv6 and len(raw_packet) <= 80:
 			dst_tcp, tcp_flags = unpack_tcp_header(raw_packet[54:74])
 			msg_type = check_type(tcp_flags)
@@ -269,16 +270,20 @@ if __name__ == "__main__":
 	ip_header = build_ipv6_header(source_addr, dest_addr)
 
 	conn = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(3))
-
+	opened_ports = []
 	for ports in range(int(sys.argv[2]), int(sys.argv[3])):
-		print('Port {}'.format(ports))
+		print('>>>>>>>>>>>> Sending to Port {}'.format(ports))
 		if sys.argv[1] == "1": # SYN ACK
 			tcp_connect("syn",0)
 			if listener(my_ipv6,dst_ipv6,1, conn):
-				print("SYNACK")
+				print("syn/ack received, sending ack")
+				
+				opened_ports.append(ports)
 				tcp_connect("ack",1) # RESPONDE UM ACK
+				print('Connected to {}'.format(ports))
+				
 				# FIM DO ATAQUE
-				break
+				#break
 				# PORTA ABERTA -> ENVIAR ACK
 			else:
 				print("RST")
@@ -288,21 +293,25 @@ if __name__ == "__main__":
 		elif sys.argv[1] == "2": #SYN RST
 			tcp_connect("syn",0)
 			if listener(my_ipv6,dst_ipv6,2, conn):
-				print("SYNACK")
+				print("syn/ack received, sending rst")
 				tcp_connect("rst",1) # RESPONDE UM ACK
+				print('{} Half opened'.format(ports))
+				opened_ports.append(ports)
 				# FIM DO ATAQUE
-				break
+				#break
 				# PORTA ABERTA -> ENVIAR ACK
 			else:
-				print("RST")
+				print("RST Trying next")
 				# PORTA FECHADA ->  TESTAR PROXIMA
 
-			tcp_half_openning(sys.argv[2], sys.argv[3])
+		
 		elif sys.argv[1] == "3": #FIN
 			tcp_connect("fin",0)
 			if listener(my_ipv6,dst_ipv6,3, conn):
 				# DEVE IMPLEMENTAR TIMEOUT -> ENCONTROU PORTA ABERTA
-				break
+				print('{} is opened'.format(ports))
+				opened_ports.append(ports)
+				#break
 				# PORTA ABERTA -> ENVIAR ACK
 			else:
 				print("RST1")
@@ -311,11 +320,14 @@ if __name__ == "__main__":
 		elif sys.argv[1] == "4":
 			tcp_connect("syn/ack",0)
 			if listener(my_ipv6,dst_ipv6,4, conn):
-				print("RST")
-				break
+				opened_ports.append(ports)
+				print('{} is opened'.format(ports))
+				#break
 				# PORTA ABERTA -> ENVIAR ACK
 			else:
 				print("NOT OPENED")
 				# PORTA FECHADA ->  TESTAR PROXIMA
+	print('\nAvailable ports: {}'.format(opened_ports))
+	print(">> END OF ATTACK\n")
 
 
