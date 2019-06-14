@@ -279,11 +279,11 @@ if __name__ == "__main__":
 			tcp_connect("syn",0)
 			if listener(my_ipv6,dst_ipv6,1, conn,ports):
 				print("syn/ack received, sending ack")
-				#tcp_connect("ack",1)
+				tcp_connect("ack",1)
 				print('Sucessfully connected to {}'.format(ports))
 				opened_ports.append(ports)
 			else:
-				tcp_connect("ack",1)
+				#tcp_connect("ack",1)
 				print("RST received -> closed")
 				# PORTA FECHADA ->  TESTAR PROXIMA
 
@@ -299,7 +299,7 @@ if __name__ == "__main__":
 				#break
 				# PORTA ABERTA -> ENVIAR ACK
 			else:
-				tcp_connect("rst",1)				
+				#tcp_connect("rst",1)				
 				print("Closed")
 				# PORTA FECHADA ->  TESTAR PROXIMA
 
