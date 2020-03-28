@@ -1,4 +1,4 @@
-# Final exercise of networks 2
+# Final exercise of Computer Networks 2
 ##### Trabalho sobre protocolo IPV6 e TCP da disciplina/cadeira de Redes 2. 
 
 #### Configuracao:
